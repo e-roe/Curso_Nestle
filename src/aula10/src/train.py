@@ -7,15 +7,13 @@ from torchvision.datasets import CocoDetection
 from torchvision.transforms import functional as F
 import time
 
-
-# Define transformations
+# Classe de transformação para converter imagens PIL em tensores
 class CocoTransform:
     def __call__(self, image, target):
-        image = F.to_tensor(image)  # Convert PIL image to tensor
+        image = F.to_tensor(image)  # Converte imagem PIL para tensor
         return image, target
 
-
-# Dataset class
+# Função para criar o dataset COCO
 def get_coco_dataset(img_dir, ann_file):
     return CocoDetection(
         root=img_dir,
@@ -23,72 +21,54 @@ def get_coco_dataset(img_dir, ann_file):
         transforms=CocoTransform()
     )
 
-
-# Load datasets
+# Carrega os datasets de treino e validação
 train_dataset = get_coco_dataset(
     img_dir="../data/train",
     ann_file="../data/train/annotations.json"
 )
-
 
 val_dataset = get_coco_dataset(
     img_dir="../data/val",
     ann_file="../data/val/annotations.json"
 )
 
-
-# Load Faster R-CNN with ResNet-50 backbone
+# Função para carregar o modelo Faster R-CNN com backbone ResNet-50
 def get_model(num_classes):
-    # Load pre-trained Faster R-CNN
-    model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
-
-    # Get the number of input features for the classifier
-    in_features = model.roi_heads.box_predictor.cls_score.in_features
-
-    # Replace the pre-trained head with a new one
-    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+    model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)  # Modelo pré-treinado
+    in_features = model.roi_heads.box_predictor.cls_score.in_features  # Número de entradas do classificador
+    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)  # Substitui a cabeça do classificador
     return model
 
-
+# Função para treinar o modelo por uma época
 def train_one_epoch(model, optimizer, data_loader, device, epoch):
     model.train()
     for images, targets in data_loader:
-        # Move images to the device
-        images = [img.to(device) for img in images]
+        images = [img.to(device) for img in images]  # Move imagens para o dispositivo
 
-        # Validate and process targets
+        # Processa e valida os targets
         processed_targets = []
         valid_images = []
         for i, target in enumerate(targets):
             boxes = []
             labels = []
             for obj in target:
-                # Extract bbox
-                bbox = obj["bbox"]  # Format: [x, y, width, height]
+                bbox = obj["bbox"]  # Formato: [x, y, largura, altura]
                 x, y, w, h = bbox
-
-                # Ensure the width and height are positive
-                if w > 0 and h > 0:
-                    boxes.append([x, y, x + w, y + h])  # Convert to [x_min, y_min, x_max, y_max]
+                if w > 0 and h > 0:  # Garante que largura e altura sejam positivas
+                    boxes.append([x, y, x + w, y + h])  # Converte para [x_min, y_min, x_max, y_max]
                     labels.append(obj["category_id"])
-
-            # Only process if there are valid boxes
-            if boxes:
+            if boxes:  # Só adiciona se houver caixas válidas
                 processed_target = {
                     "boxes": torch.tensor(boxes, dtype=torch.float32).to(device),
                     "labels": torch.tensor(labels, dtype=torch.int64).to(device),
                 }
                 processed_targets.append(processed_target)
-                valid_images.append(images[i])  # Add only valid images
-
-        # Skip iteration if no valid targets
-        if not processed_targets:
+                valid_images.append(images[i])
+        if not processed_targets:  # Pula se não houver targets válidos
             continue
+        images = valid_images  # Garante alinhamento entre imagens e targets
 
-        # Ensure images and targets are aligned
-        images = valid_images
-
-        # Forward pass
+        # Passagem direta pelo modelo
         loss_dict = model(images, processed_targets)
         losses = sum(loss for loss in loss_dict.values())
 
@@ -97,33 +77,31 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch):
         losses.backward()
         optimizer.step()
 
-    print(f"Epoch [{epoch}] Loss: {losses.item():.4f}")
+    print(f"Época [{epoch}] - Loss: {losses.item():.4f}")
 
-
-# DataLoader
+# DataLoader para treino e validação
 train_loader = DataLoader(train_dataset, batch_size=4, shuffle=True, collate_fn=lambda x: tuple(zip(*x)))
 val_loader = DataLoader(val_dataset, batch_size=4, shuffle=False, collate_fn=lambda x: tuple(zip(*x)))
 
-# Initialize the model
-num_classes = 4 # Background + capacete, colete, abafador
+# Inicializa o modelo com o número de classes
+num_classes = 4 # Fundo + capacete, colete, abafador
 model = get_model(num_classes)
 
-# Move model to GPU if available
+# Move o modelo para GPU se disponível
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 model.to(device)
 
-# Define optimizer and learning rate scheduler
+# Define o otimizador e o scheduler de taxa de aprendizado
 params = [p for p in model.parameters() if p.requires_grad]
 optimizer = torch.optim.SGD(params, lr=0.005, momentum=0.9, weight_decay=0.0005)
 
-# Training loop
+# Loop de treinamento principal
 num_epochs = 25
 for epoch in range(num_epochs):
     start = time.time()
     train_one_epoch(model, optimizer, train_loader, device, epoch)
-    print(f'Time taken for epoch {epoch + 1}: {time.time() - start:.2f} seconds')
-    # Save the model's state dictionary after every epoch
+    print(f'Tempo da época {epoch + 1}: {time.time() - start:.2f} segundos')
+    # Salva o estado do modelo após cada época
     model_path = f"../models/fasterrcnn_resnet50_epoch_{epoch + 1}.pth"
     torch.save(model.state_dict(), model_path)
-    print(f"Model saved: {model_path}")
-
+    print(f"Modelo salvo: {model_path}")
