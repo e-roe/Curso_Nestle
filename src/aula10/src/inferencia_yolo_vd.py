@@ -6,9 +6,7 @@ from ultralytics import YOLO
 bbox_colors = {'capacete': (255, 100, 100), 'colete': (255, 0, 255), 'abafador': (10, 250, 100)}
 
 if __name__ == "__main__":
-    # Pasta com as imagens para inferência
-    images_dir = r'C:\Roe\Stepps\projs\Curso_Nestle\src\aula10\data\test'
-
+    
     # Carrega o modelo YOLO treinado
     model = YOLO(r'C:\Roe\Stepps\projs\Curso_Nestle\src\aula10\runs\detect\train\weights\best.pt')
 
@@ -24,9 +22,17 @@ if __name__ == "__main__":
         
         # Realiza a inferência com o modelo YOLO
         results = model(frame)
+        porta_aberta_encontrada = False
+        chip_azul_encontrado = False
+        chip_vermelho_encontrado = False
         for result in results:
             for box in result.boxes:
                 boxc = box.xyxy.cpu().numpy()[0]
+                # Classe detectada
+                class_name = result.names[int(box.cls[0])]
+                if class_name == 'porta_aberta':
+                    porta_aberta_encontrada = True
+
                 # Seleciona a cor da classe detectada
                 color = bbox_colors[result.names[int(box.cls[0])]]
                 # Desenha o retângulo de fundo (preto)
