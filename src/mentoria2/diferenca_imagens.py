@@ -1,10 +1,11 @@
 import cv2
 import numpy as np
-from skimage.metrics import structural_similarity
+from skimage.metrics import structural_similarity # instalar com: pip install scikit-image
 
+print(cv2.__version__)
 # Lê as duas imagens a serem comparadas
-first = cv2.imread('scn1.png')
-second = cv2.imread('scn2.png')
+first = cv2.imread(r'C:\Roe\Stepps\projs\Curso_Nestle\src\mentoria2\scn1.png')
+second = cv2.imread(r'C:\Roe\Stepps\projs\Curso_Nestle\src\mentoria2\scn2.png')
 
 img_upper = cv2.hconcat([first, second])
 cv2.imshow('Diferencas', cv2.resize(img_upper, (0, 0), fx=0.8, fy=0.8))
